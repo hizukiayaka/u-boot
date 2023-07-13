@@ -123,6 +123,9 @@
 #if defined(CONFIG_CMD_WOL)
 #include "wol.h"
 #endif
+#if defined(CONFIG_MTK_TCP)
+#include "mtk_tcp.h"
+#endif
 #include "dhcpv6.h"
 #include "net_rand.h"
 
@@ -600,6 +603,11 @@ restart:
 			if (IS_ENABLED(CONFIG_IPV6_ROUTER_DISCOVERY))
 				ip6_send_rs();
 			break;
+#if defined(CONFIG_MTK_TCP)
+		case MTK_TCP:
+			mtk_tcp_start();
+			break;
+#endif
 		default:
 			break;
 		}
@@ -648,7 +656,9 @@ restart:
 		 *	errors that may have happened.
 		 */
 		eth_rx();
-
+#if defined(CONFIG_MTK_TCP)
+		mtk_tcp_periodic_check();
+#endif
 		/*
 		 *	Abort if ctrl-c was pressed.
 		 */
@@ -1388,6 +1398,10 @@ void net_process_received_packet(uchar *in_packet, int len)
 				   "TCP PH (to=%pI4, from=%pI4, len=%d)\n",
 				   &dst_ip, &src_ip, len);
 
+#if defined(CONFIG_MTK_TCP)
+			bool rc = mtk_receive_tcp((struct ip_hdr *)ip, len, et);
+			if (!rc)
+#endif
 			rxhand_tcp_f((union tcp_build_pkt *)ip, len);
 			return;
 #endif
@@ -1529,6 +1543,9 @@ common:
 	case FASTBOOT_UDP:
 	case FASTBOOT_TCP:
 	case TFTPSRV:
+#if defined(CONFIG_MTK_TCP)
+	case MTK_TCP:
+#endif
 		if (IS_ENABLED(CONFIG_IPV6) && use_ip6) {
 			if (!memcmp(&net_link_local_ip6, &net_null_addr_ip6,
 				    sizeof(struct in6_addr))) {
