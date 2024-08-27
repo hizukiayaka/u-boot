@@ -23,6 +23,7 @@
 
 #define PART_BL2_NAME		"bl2"
 #define PART_FIP_NAME		"fip"
+#define PART_ITB_FW_NAME	"production"
 
 static int write_part(const char *partname, const void *data, size_t size,
 		      bool verify)
@@ -254,6 +255,20 @@ static int write_firmware(void *priv, const struct data_part_entry *dpe,
 	return mmc_upgrade_image(MMC_DEV_INDEX, data, size);
 }
 
+#if defined(CONFIG_FIT)
+static int validate_itb_firmware(void *priv, const struct data_part_entry *dpe,
+			     const void *data, size_t size)
+{
+	return 0;
+}
+
+static int write_itb_firmware(void *priv, const struct data_part_entry *dpe,
+			  const void *data, size_t size)
+{
+	return write_part(PART_ITB_FW_NAME, data, size, true);
+}
+#endif
+
 static int write_gpt(void *priv, const struct data_part_entry *dpe,
 		     const void *data, size_t size)
 {
@@ -298,7 +313,7 @@ static const struct data_part_entry mmc_parts[] = {
 		.env_name = "bootfile.fip",
 		.validate = validate_fip_image,
 		.write = write_fip,
-		.post_action = UPGRADE_ACTION_CUSTOM,
+		.post_action = UPGRADE_ACTION_NONE,
 		.do_post_action = erase_env,
 	},
 #ifdef CONFIG_MTK_FIP_SUPPORT
@@ -321,13 +336,23 @@ static const struct data_part_entry mmc_parts[] = {
 	},
 #endif
 	{
-		.name = "Firmware",
-		.abbr = "fw",
+		.name = "firmware(legacy)",
+		.abbr = "legacy",
 		.env_name = "bootfile",
-		.post_action = UPGRADE_ACTION_BOOT,
+		.post_action = UPGRADE_ACTION_NONE,
 		.validate = validate_firmware,
 		.write = write_firmware,
 	},
+#if defined(CONFIG_FIT)
+	{
+		.name = "firmware FIP",
+		.abbr = "production",
+		.env_name = "bootfile",
+		.post_action = UPGRADE_ACTION_NONE,
+		.validate = validate_itb_firmware,
+		.write = write_itb_firmware,
+	},
+#endif
 	{
 		.name = "Single image",
 		.abbr = "simg",

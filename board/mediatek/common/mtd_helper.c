@@ -494,7 +494,7 @@ int boot_from_mtd(struct mtd_info *mtd, u64 offset)
 #endif
 #if defined(CONFIG_FIT)
 	case IMAGE_FORMAT_FIT:
-		size = fit_get_size((const void *)data_load_addr);
+		size = fit_get_totalsize((const void *)data_load_addr);
 		break;
 #endif
 	default:

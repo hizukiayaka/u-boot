@@ -60,3 +60,7 @@ $(obj)/%.o: $(src)/%.html FORCE
 $(obj)/%.o: $(src)/%.css FORCE
 	$(call cmd,force_checksrc)
 	$(call if_changed_dep,as_o_html)
+
+$(obj)/%.o: $(src)/%.js FORCE
+	$(call cmd,force_checksrc)
+	$(call if_changed_dep,as_o_html)
