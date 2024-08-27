@@ -15,19 +15,25 @@
 #include <net/mtk_httpd.h>
 #include <u-boot/md5.h>
 #include <vsprintf.h>
+#include <failsafe.h>
 #include "fs.h"
 
 static u32 upload_data_id;
 static const void *upload_data;
 static size_t upload_size;
 static int upgrade_success;
+/* Upload page would update its value */
+static failsafe_fw_t fw_type;
 
-int __weak failsafe_validate_image(const void *data, size_t size)
+/* those two symbols are defined in board/mediatek/common/failsafe.c */
+int __weak failsafe_validate_image(const failsafe_fw_t fw_type,
+				   const void *data, size_t size)
 {
 	return 0;
 }
 
-int __weak failsafe_write_image(const void *data, size_t size)
+int __weak failsafe_write_image(const failsafe_fw_t fw_type,
+		                const void *data, size_t size)
 {
 	return -ENOSYS;
 }
@@ -66,6 +72,10 @@ static void index_handler(enum httpd_uri_handler_status status,
 		output_plain_file(response, "index.html");
 }
 
+static void not_found_handler(enum httpd_uri_handler_status status,
+			      struct httpd_request *request,
+			      struct httpd_response *response);
+
 struct upload_status {
 	bool free_response_data;
 };
@@ -76,6 +86,7 @@ static void upload_handler(enum httpd_uri_handler_status status,
 {
 	char *buff, *md5_ptr, *size_ptr, size_str[16];
 	struct httpd_form_value *fw;
+	char *part_target_p;
 	struct upload_status *us;
 	u8 md5_sum[16];
 	int i;
@@ -91,7 +102,19 @@ static void upload_handler(enum httpd_uri_handler_status status,
 
 		response->session_data = us;
 
-		fw = httpd_request_find_value(request, "firmware");
+		if (fw = httpd_request_find_value(request, "firmware"), fw)
+			fw_type = FW_TYPE_ITB_FW;
+		else if (fw = httpd_request_find_value(request, "uboot"), fw)
+			fw_type = FW_TYPE_FIP;
+		else if (fw = httpd_request_find_value(request, "bl2"), fw)
+			fw_type = FW_TYPE_BL2;
+		else if (fw = httpd_request_find_value(request, "gpt"), fw)
+			fw_type = FW_TYPE_GPT;
+		else if (fw = httpd_request_find_value(request, "legacy"), fw)
+			fw_type = FW_TYPE_FW_LEGACY;
+		else
+			fw = NULL;
+
 		if (!fw) {
 			response->info.code = 302;
 			response->info.connection_close = 1;
@@ -99,7 +122,7 @@ static void upload_handler(enum httpd_uri_handler_status status,
 			return;
 		}
 
-		if (failsafe_validate_image(fw->data, fw->size)) {
+		if (failsafe_validate_image(fw_type, fw->data, fw->size)) {
 			if (output_plain_file(response, "validate_fail.html"))
 				response->info.code = 500;
 
@@ -114,10 +137,11 @@ static void upload_handler(enum httpd_uri_handler_status status,
 		buff = malloc(response->size + 1);
 		if (buff) {
 			memcpy(buff, response->data, response->size);
-			buff[response->size] = 0;
+			buff[response->size] = '\0';
 
 			md5_ptr = strstr(buff, "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX");
 			size_ptr = strstr(buff, "YYYYYYYYYY");
+			part_target_p = strstr(buff, "UUUUUUUUUUUUUUUU");
 
 			if (md5_ptr) {
 				md5((u8 *)fw->data, fw->size, md5_sum);
@@ -138,6 +162,34 @@ static void upload_handler(enum httpd_uri_handler_status status,
 					     fw->size);
 				memset(size_str + n, ' ', sizeof(size_str) - n);
 				memcpy(size_ptr, size_str, 10);
+			}
+
+			if (part_target_p) {
+				size_t n;
+				const char *part_target_str;
+
+				switch (fw_type) {
+				case FW_TYPE_BL2:
+					part_target_str = "Preload";
+					break;
+				case FW_TYPE_FIP:
+					part_target_str = "ATF & U-Boot";
+					break;
+				case FW_TYPE_GPT:
+					part_target_str = "GPT";
+					break;
+				case FW_TYPE_FW_LEGACY:
+					part_target_str = "firmware(tar)";
+					break;
+				case FW_TYPE_ITB_FW:
+				default:
+					part_target_str = "firmware(fip)";
+					break;
+				}
+
+				n = strnlen(part_target_str, 16);
+				memcpy(part_target_p, part_target_str, n);
+				memset(part_target_p + n, ' ', 16 - n);
 			}
 
 			response->data = buff;
@@ -222,7 +274,7 @@ static void result_handler(enum httpd_uri_handler_status status,
 		}
 
 		if (upload_data_id == upload_id)
-			st->ret = failsafe_write_image(upload_data,
+			st->ret = failsafe_write_image(fw_type, upload_data,
 						       upload_size);
 
 		/* invalidate upload identifier */

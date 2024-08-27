@@ -11,26 +11,45 @@
 #include <errno.h>
 #include <linux/string.h>
 #include <asm/global_data.h>
+#include <failsafe.h>
 #include "upgrade_helper.h"
 #include "colored_print.h"
 
 DECLARE_GLOBAL_DATA_PTR;
 
-#define UPGRADE_PART		"fw"
-
 static const struct data_part_entry *find_part(const struct data_part_entry *parts,
-					       u32 num_parts, const char *abbr)
+					       u32 num_parts,
+					       failsafe_fw_t fw_type)
 {
+	const char *abbr = NULL;
 	u32 i;
 
-	if (!abbr)
-		return NULL;
+	switch(fw_type) {
+	case FW_TYPE_GPT:
+		abbr = "gpt";
+		break;
+	case FW_TYPE_BL2:
+		abbr = "bl2";
+		break;
+	case FW_TYPE_FIP:
+		abbr = "fip";
+		break;
+	case FW_TYPE_FW_LEGACY:
+		abbr = "fw";
+		break;
+	case FW_TYPE_ITB_FW:
+		abbr = "production";
+		break;
+	default:
+		goto failed;
+	}
 
 	for (i = 0; i < num_parts; i++) {
-		if (!strcmp(parts[i].abbr, abbr))
+		if (!strncmp(parts[i].abbr, abbr, strlen(parts[i].abbr)))
 			return &parts[i];
 	}
 
+failed:
 	cprintln(ERROR, "*** Invalid upgrading part! ***");
 
 	return NULL;
@@ -42,7 +61,8 @@ void *httpd_get_upload_buffer_ptr(size_t size)
 	return (void *)gd->ram_base + 0x4000000;
 }
 
-int failsafe_validate_image(const void *data, size_t size)
+int failsafe_validate_image(const failsafe_fw_t fw_type, const void *data,
+							size_t size)
 {
 	const struct data_part_entry *upgrade_parts, *dpe;
 	u32 num_parts;
@@ -54,7 +74,7 @@ int failsafe_validate_image(const void *data, size_t size)
 		return -ENOSYS;
 	}
 
-	dpe = find_part(upgrade_parts, num_parts, UPGRADE_PART);
+	dpe = find_part(upgrade_parts, num_parts, fw_type);
 	if (!dpe)
 		return -ENODEV;
 
@@ -64,7 +84,8 @@ int failsafe_validate_image(const void *data, size_t size)
 	return 0;
 }
 
-int failsafe_write_image(const void *data, size_t size)
+int failsafe_write_image(const failsafe_fw_t fw_type, const void *data,
+						 size_t size)
 {
 	const struct data_part_entry *upgrade_parts, *dpe;
 	u32 num_parts;
@@ -77,7 +98,7 @@ int failsafe_write_image(const void *data, size_t size)
 		return -ENOSYS;
 	}
 
-	dpe = find_part(upgrade_parts, num_parts, UPGRADE_PART);
+	dpe = find_part(upgrade_parts, num_parts, fw_type);
 	if (!dpe)
 		return -ENODEV;
 
