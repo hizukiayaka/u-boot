@@ -201,6 +201,9 @@ config SYS_HZ
 	  get_timer() must operate in milliseconds and this option must be
 	  set to 1000.
 
+config POLLER
+    bool "generic polling infrastructure"
+
 config SPL_USE_TINY_PRINTF
 	bool "Enable tiny printf() version in SPL"
 	depends on SPL

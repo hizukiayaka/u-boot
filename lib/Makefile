@@ -125,6 +125,7 @@ obj-$(CONFIG_GETOPT) += getopt.o
 obj-$(CONFIG_TRACE) += trace.o
 obj-$(CONFIG_LIB_UUID) += uuid.o
 obj-$(CONFIG_LIB_RAND) += rand.o
+obj-$(CONFIG_POLLER) += poller.o
 obj-y += panic.o
 
 ifeq ($(CONFIG_SPL_BUILD),y)
