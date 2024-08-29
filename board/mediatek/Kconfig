@@ -146,6 +146,10 @@ config MTK_WEB_FAILSAFE_AFTER_BOOT_FAILURE
 	  firmware image available for boot.
 	  This requires booting system using mtkboardboot command.
 
+config MTK_WEB_FAILSAFE_INDICATOR_LED_LABEL
+	string "LED indicator label"
+	depends on MTK_WEB_FAILSAFE
+
 config MTK_UBI_SUPPORT
 	bool "Enable support for UBI-based images"
 	select MTD_UBI
