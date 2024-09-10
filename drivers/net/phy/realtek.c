@@ -59,6 +59,20 @@
 #define MIIM_RTL8211F_RX_DELAY		0x8
 #define MIIM_RTL8211F_LCR		0x10
 
+#define RTL822X_VND1_SERDES_OPTION						0x697a
+#define RTL822X_VND1_SERDES_OPTION_MODE_MASK			GENMASK(5, 0)
+#define RTL822X_VND1_SERDES_OPTION_MODE_2500BASEX_SGMII	0
+#define RTL822X_VND1_SERDES_OPTION_MODE_2500BASEX		2
+
+#define RTL822X_VND1_SERDES_CTRL3						0x7580
+#define RTL822X_VND1_SERDES_CTRL3_MODE_MASK				GENMASK(5, 0)
+#define RTL822X_VND1_SERDES_CTRL3_MODE_SGMII			0x02
+#define RTL822X_VND1_SERDES_CTRL3_MODE_2500BASEX		0x16
+
+#define RTL822X_VND2_GBCR								0xa412
+#define RTL822X_VND2_GANLPAR							0xa414
+#define RTL822X_VND2_PHYSR								0xa434
+
 #define RTL8201F_RMSR			0x10
 
 #define RMSR_RX_TIMING_SHIFT		BIT(2)
@@ -396,6 +410,48 @@ static int rtl8211f_startup(struct phy_device *phydev)
 	return rtl8211f_parse_status(phydev);
 }
 
+static int rtl8221xb_probe(struct phy_device *phydev)
+{
+    bool has_2500, has_sgmii;
+    int mode, ret;
+
+    has_2500 = phydev->interface & PHY_INTERFACE_MODE_2500BASEX;
+    has_sgmii = phydev->interface & PHY_INTERFACE_MODE_SGMII;
+
+    if (!has_2500 && !has_sgmii)
+        return -1;
+
+    ret = phy_write_mmd(phydev, MDIO_MMD_VEND1, 0x75f3, 0);
+    if (ret < 0)
+        return ret;
+
+    if (has_2500 && !has_sgmii)
+        mode = RTL822X_VND1_SERDES_OPTION_MODE_2500BASEX;
+    else
+        mod = RTL822X_VND1_SERDES_OPTION_MODE_2500BASEX_SGMII;
+
+    ret = phy_modify_mmd_changed(phydev, MDIO_MMD_VEND1,
+                                 RTL822X_VND1_SERDES_OPTION,
+                                 RTL822X_VND1_SERDES_OPTION_MODE_MASK,
+                                 mode);
+    if (ret < 0)
+        return ret;
+
+    ret = phy_write_mmd(phydev, MDIO_MMD_VEND1, 0x6a04, 0x0503);
+    if (ret < 0)
+        return ret;
+
+    ret = phy_write_mmd(phydev, MDIO_MMD_VEND1, 0x6f10, 0xd455);
+    if (ret < 0)
+        return ret;
+
+    return phy_write_mmd(phydev, MDIO_MMD_VEND1, 0x6f11, 0x8020);
+}
+
+static int rtl8221xb_config(struct phy_device *phydev)
+{
+}
+
 /* Support for RTL8211B PHY */
 U_BOOT_PHY_DRIVER(rtl8211b) = {
 	.name = "RealTek RTL8211B",
@@ -457,6 +513,18 @@ U_BOOT_PHY_DRIVER(rtl8211fvd) = {
 	.shutdown = &genphy_shutdown,
 	.readext = &rtl8211f_phy_extread,
 	.writeext = &rtl8211f_phy_extwrite,
+};
+
+/* Support for RTL8211B(I)-VB PHY */
+U_BOOT_PHY_DRIVER(rtl8221b) = {
+	.name = "RealTek RTL8221B",
+	.uid = 0x1cc849,
+	.mask = 0xffffff,
+	.features = PHY_GBIT_FEATURES,
+	.probe = &rtl8221xb_probe,
+	.config = &rtl8221xb_config,
+	.startup = &genphy_startup,
+	.shutdown = &genphy_shutdown,
 };
 
 /* Support for RTL8201F PHY */
